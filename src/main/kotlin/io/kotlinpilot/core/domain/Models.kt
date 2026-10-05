@@ -108,13 +108,15 @@ data class ModuleInfo(
     val isAndroid: Boolean = false,
     val isCompose: Boolean = false,
     val isKmp: Boolean = false,
+    val isComposeMultiplatform: Boolean = false,
+    val kmpTargets: List<String> = emptyList(),
     val dependencies: List<String> = emptyList()
 )
 
 @Serializable
 data class ArchitectureHint(
-    val category: String, // e.g. "UI", "DI", "Networking", "Database", "Architecture"
-    val pattern: String,  // e.g. "Jetpack Compose", "Koin", "Ktor", "Room", "MVI"
+    val category: String, // e.g. "UI", "DI", "Networking", "Database", "Architecture", "Multiplatform"
+    val pattern: String,  // e.g. "Jetpack Compose", "Compose Multiplatform", "KMP", "Koin", "Ktor", "Room", "MVI"
     val confidence: Double = 1.0,
     val details: String = ""
 )
@@ -130,6 +132,8 @@ data class ProjectAnalysis(
     val agpVersion: String? = null,
     val composeEnabled: Boolean = false,
     val kmpEnabled: Boolean = false,
+    val composeMultiplatformEnabled: Boolean = false,
+    val kmpTargets: List<String> = emptyList(),
     val modules: List<ModuleInfo> = emptyList(),
     val architectureHints: List<ArchitectureHint> = emptyList(),
     val testFrameworks: List<String> = emptyList(),

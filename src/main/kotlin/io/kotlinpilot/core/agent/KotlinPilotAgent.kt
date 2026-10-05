@@ -207,8 +207,8 @@ class KotlinPilotAgent(
 
     private fun buildSystemPrompt(analysis: ProjectAnalysis): String {
         return buildString {
-            append("You are KotlinPilot, an autonomous senior Kotlin and Android engineering agent.\n")
-            append("Your goal is to inspect Kotlin/Android projects, plan modifications, edit files, build with Gradle, fix compilation/test issues, and verify changes.\n\n")
+            append("You are KotlinPilot, an autonomous senior Kotlin, Android, and Kotlin Multiplatform (KMP/CMP) engineering agent.\n")
+            append("Your goal is to inspect Kotlin/Android/KMP projects, plan modifications, edit files, build with Gradle, fix compilation/test issues, and verify changes.\n\n")
             append("=== SECURITY & OPERATIONAL RULES ===\n")
             append("1. SECURITY IS FIRST: You may ONLY operate on files inside the project workspace. Never attempt path traversal or accessing system secrets.\n")
             append("2. REALITY INTEGRITY: NEVER claim you ran a command, modified a file, or that Gradle passed unless you actually called the respective tool and observed success.\n")
@@ -218,8 +218,8 @@ class KotlinPilotAgent(
             append("Project Name: ${analysis.projectName}\n")
             append("Kotlin: ${analysis.kotlinVersion ?: "detected"}\n")
             append("Gradle: ${analysis.gradleVersion ?: "detected"}\n")
-            append("Android Compose: ${if (analysis.composeEnabled) "Enabled" else "Disabled"}\n")
-            append("KMP Multiplatform: ${if (analysis.kmpEnabled) "Enabled" else "Disabled"}\n")
+            append("Compose Framework: ${if (analysis.composeMultiplatformEnabled) "Compose Multiplatform (CMP)" else if (analysis.composeEnabled) "Jetpack Compose" else "None"}\n")
+            append("Kotlin Multiplatform (KMP): ${if (analysis.kmpEnabled) "Enabled (Targets: ${analysis.kmpTargets.ifEmpty { listOf("common") }.joinToString(", ")})" else "Disabled"}\n")
             append("Modules: ${analysis.modules.map { it.name }.joinToString(", ")}\n")
             if (analysis.architectureHints.isNotEmpty()) {
                 append("Architecture Patterns: ${analysis.architectureHints.map { "${it.category}: ${it.pattern}" }.joinToString("; ")}\n")

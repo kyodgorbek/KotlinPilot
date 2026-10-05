@@ -48,11 +48,17 @@ class RepositoryAnalyzer(
         val agpVersion = extractAgpVersion(combinedBuildContent)
 
         // Android / Compose / KMP detection
-        val isCompose = combinedBuildContent.contains("compose", ignoreCase = true) || combinedBuildContent.contains("androidx.compose")
-        val isKmp = combinedBuildContent.contains("kotlin(\"multiplatform\")") || combinedBuildContent.contains("org.jetbrains.kotlin.multiplatform")
+        val isCmp = combinedBuildContent.contains("org.jetbrains.compose") || 
+                    combinedBuildContent.contains("compose.components") ||
+                    combinedBuildContent.contains("compose.material3") && combinedBuildContent.contains("multiplatform")
+        val isCompose = isCmp || combinedBuildContent.contains("compose", ignoreCase = true) || combinedBuildContent.contains("androidx.compose")
+        val isKmp = combinedBuildContent.contains("kotlin(\"multiplatform\")") || 
+                    combinedBuildContent.contains("org.jetbrains.kotlin.multiplatform") ||
+                    combinedBuildContent.contains("kotlin-multiplatform")
+        val kmpTargets = extractKmpTargets(combinedBuildContent)
 
         // Architecture hints
-        val architectureHints = detectArchitectureHints(combinedBuildContent, root)
+        val architectureHints = detectArchitectureHints(combinedBuildContent, root, isKmp, isCmp)
 
         // Test frameworks
         val testFrameworks = detectTestFrameworks(combinedBuildContent)
@@ -74,6 +80,8 @@ class RepositoryAnalyzer(
             agpVersion = agpVersion,
             composeEnabled = isCompose,
             kmpEnabled = isKmp,
+            composeMultiplatformEnabled = isCmp,
+            kmpTargets = kmpTargets,
             modules = modules,
             architectureHints = architectureHints,
             testFrameworks = testFrameworks,
@@ -84,6 +92,19 @@ class RepositoryAnalyzer(
 
     private fun hasKotlinFiles(dir: File): Boolean {
         return dir.walkTopDown().maxDepth(5).any { it.isFile && (it.extension == "kt" || it.extension == "kts") }
+    }
+
+    private fun extractKmpTargets(buildContent: String): List<String> {
+        val targets = mutableListOf<String>()
+        if (buildContent.contains("androidTarget") || buildContent.contains("android()")) targets.add("Android")
+        if (buildContent.contains("iosArm64") || buildContent.contains("iosSimulatorArm64") || buildContent.contains("iosX64") || buildContent.contains("ios()")) targets.add("iOS")
+        if (buildContent.contains("jvm(") || buildContent.contains("jvm()") || buildContent.contains("desktop {")) targets.add("Desktop (JVM)")
+        if (buildContent.contains("wasmJs")) targets.add("Web (Wasm)")
+        if (buildContent.contains("js(IR)") || buildContent.contains("js {")) targets.add("Web (JS)")
+        if (buildContent.contains("macosX64") || buildContent.contains("macosArm64")) targets.add("macOS")
+        if (buildContent.contains("linuxX64") || buildContent.contains("linuxArm64")) targets.add("Linux")
+        if (buildContent.contains("mingwX64")) targets.add("Windows (Native)")
+        return targets.distinct()
     }
 
     private fun discoverModules(root: File, settingsKts: File, settingsGroovy: File): List<ModuleInfo> {
@@ -108,8 +129,10 @@ class RepositoryAnalyzer(
             } else ""
             
             val isAndroid = modBuild.contains("com.android.") || (modDir.exists() && File(modDir, "src/main/AndroidManifest.xml").exists())
-            val isCompose = modBuild.contains("compose", ignoreCase = true)
+            val isCmp = modBuild.contains("org.jetbrains.compose")
+            val isCompose = isCmp || modBuild.contains("compose", ignoreCase = true)
             val isKmp = modBuild.contains("multiplatform")
+            val modTargets = extractKmpTargets(modBuild)
 
             modules.add(
                 ModuleInfo(
@@ -117,7 +140,9 @@ class RepositoryAnalyzer(
                     path = path,
                     isAndroid = isAndroid,
                     isCompose = isCompose,
-                    isKmp = isKmp
+                    isKmp = isKmp,
+                    isComposeMultiplatform = isCmp,
+                    kmpTargets = modTargets
                 )
             )
         }
@@ -126,13 +151,16 @@ class RepositoryAnalyzer(
             // Root project itself is the single module
             val rootBuild = listOf(File(root, "build.gradle.kts"), File(root, "build.gradle"))
                 .firstOrNull { it.exists() }?.readText() ?: ""
+            val isCmp = rootBuild.contains("org.jetbrains.compose")
             modules.add(
                 ModuleInfo(
                     name = "root",
                     path = ".",
                     isAndroid = rootBuild.contains("com.android."),
-                    isCompose = rootBuild.contains("compose", ignoreCase = true),
-                    isKmp = rootBuild.contains("multiplatform")
+                    isCompose = isCmp || rootBuild.contains("compose", ignoreCase = true),
+                    isKmp = rootBuild.contains("multiplatform"),
+                    isComposeMultiplatform = isCmp,
+                    kmpTargets = extractKmpTargets(rootBuild)
                 )
             )
         }
@@ -161,38 +189,68 @@ class RepositoryAnalyzer(
         return regex.find(buildContent)?.groupValues?.get(1)
     }
 
-    private fun detectArchitectureHints(buildContent: String, root: File): List<ArchitectureHint> {
+    private fun detectArchitectureHints(buildContent: String, root: File, isKmp: Boolean = false, isCmp: Boolean = false): List<ArchitectureHint> {
         val hints = mutableListOf<ArchitectureHint>()
+
+        // Kotlin Multiplatform / Compose Multiplatform
+        if (isKmp) {
+            val targets = extractKmpTargets(buildContent)
+            val details = if (targets.isNotEmpty()) "Targets: ${targets.joinToString(", ")}" else "Common / Native targets detected"
+            hints.add(ArchitectureHint("Multiplatform", "Kotlin Multiplatform (KMP)", 1.0, details))
+        }
+
+        if (isCmp) {
+            hints.add(ArchitectureHint("UI Framework", "Compose Multiplatform (CMP)", 1.0, "JetBrains Compose Multiplatform detected"))
+        } else if (buildContent.contains("androidx.compose") || buildContent.contains("compose", ignoreCase = true)) {
+            hints.add(ArchitectureHint("UI Framework", "Jetpack Compose", 1.0, "Android Jetpack Compose detected"))
+        }
+
+        // Navigation
+        if (buildContent.contains("voyager")) {
+            hints.add(ArchitectureHint("Navigation", "Voyager (KMP)", 1.0, "Voyager multiplatform navigation detected"))
+        } else if (buildContent.contains("decompose")) {
+            hints.add(ArchitectureHint("Navigation", "Decompose (KMP)", 1.0, "Decompose architecture & navigation detected"))
+        } else if (buildContent.contains("androidx.navigation:navigation-compose")) {
+            hints.add(ArchitectureHint("Navigation", "Jetpack Navigation Compose", 1.0, "Navigation Compose detected"))
+        }
 
         // Dependency Injection
         if (buildContent.contains("io.insert-koin") || buildContent.contains("koin")) {
-            hints.add(ArchitectureHint("Dependency Injection", "Koin", 1.0, "Found Koin dependencies in build scripts"))
+            val name = if (isKmp) "Koin Multiplatform" else "Koin"
+            hints.add(ArchitectureHint("Dependency Injection", name, 1.0, "Found Koin dependencies in build scripts"))
         } else if (buildContent.contains("com.google.dagger:hilt") || buildContent.contains("dagger.hilt")) {
             hints.add(ArchitectureHint("Dependency Injection", "Hilt/Dagger", 1.0, "Found Hilt/Dagger dependencies in build scripts"))
         }
 
-        // UI
-        if (buildContent.contains("androidx.compose") || buildContent.contains("jetbrains.compose")) {
-            hints.add(ArchitectureHint("UI Framework", "Jetpack Compose", 1.0, "Compose compiler/runtime detected"))
-        }
-
         // Networking
         if (buildContent.contains("io.ktor:ktor-client")) {
-            hints.add(ArchitectureHint("Networking", "Ktor Client", 1.0, "Found Ktor client dependencies"))
+            val name = if (isKmp) "Ktor Client (Multiplatform)" else "Ktor Client"
+            hints.add(ArchitectureHint("Networking", name, 1.0, "Found Ktor client dependencies"))
         } else if (buildContent.contains("com.squareup.retrofit2")) {
             hints.add(ArchitectureHint("Networking", "Retrofit", 1.0, "Found Retrofit dependencies"))
         }
 
         // Persistence
-        if (buildContent.contains("androidx.room")) {
-            hints.add(ArchitectureHint("Persistence", "Room Database", 1.0, "Found AndroidX Room dependencies"))
-        } else if (buildContent.contains("app.cash.sqldelight")) {
-            hints.add(ArchitectureHint("Persistence", "SQLDelight", 1.0, "Found SQLDelight dependencies"))
+        if (buildContent.contains("app.cash.sqldelight")) {
+            hints.add(ArchitectureHint("Persistence", "SQLDelight (KMP)", 1.0, "SQLDelight multiplatform database detected"))
+        } else if (buildContent.contains("androidx.room")) {
+            val name = if (isKmp) "Room (KMP)" else "Room Database"
+            hints.add(ArchitectureHint("Persistence", name, 1.0, "Found AndroidX Room dependencies"))
+        } else if (buildContent.contains("com.russhwolf:multiplatform-settings")) {
+            hints.add(ArchitectureHint("Persistence", "Multiplatform Settings", 1.0, "Key-value storage detected"))
+        }
+
+        // Logging
+        if (buildContent.contains("co.touchlab:kermit")) {
+            hints.add(ArchitectureHint("Logging", "Kermit (KMP)", 1.0, "Kermit multiplatform logging detected"))
+        } else if (buildContent.contains("io.github.aakira:napier")) {
+            hints.add(ArchitectureHint("Logging", "Napier (KMP)", 1.0, "Napier multiplatform logging detected"))
         }
 
         // Concurrency / Reactive
         if (buildContent.contains("kotlinx-coroutines")) {
-            hints.add(ArchitectureHint("Concurrency", "Kotlin Coroutines & Flow", 1.0, "Coroutines core / Flow detected"))
+            val name = if (isKmp) "Kotlin Coroutines (Multiplatform)" else "Kotlin Coroutines & Flow"
+            hints.add(ArchitectureHint("Concurrency", name, 1.0, "Coroutines core / Flow detected"))
         }
 
         // Serialization

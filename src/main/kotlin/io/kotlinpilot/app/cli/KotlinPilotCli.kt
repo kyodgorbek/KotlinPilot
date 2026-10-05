@@ -77,11 +77,15 @@ class KotlinPilotCli(
         println("  Project Name:     ${analysis.projectName}")
         println("  Kotlin:           ${if (analysis.isKotlin) "✓ Detected (${analysis.kotlinVersion ?: "auto"})" else "✗ Not detected"}")
         println("  Gradle:           ${if (analysis.isGradle) "✓ Detected (${analysis.gradleVersion ?: "auto"})" else "✗ Not detected"}")
-        println("  Android Compose:  ${if (analysis.composeEnabled) "✓ Yes" else "✗ No"}")
-        println("  Kotlin Multiplatform: ${if (analysis.kmpEnabled) "✓ Yes" else "✗ No"}")
+        println("  Android Compose:  ${if (analysis.composeEnabled && !analysis.composeMultiplatformEnabled) "✓ Yes (Jetpack Compose)" else if (analysis.composeMultiplatformEnabled) "✓ Yes (Compose Multiplatform)" else "✗ No"}")
+        println("  Kotlin Multiplatform: ${if (analysis.kmpEnabled) "✓ Yes (${if (analysis.kmpTargets.isNotEmpty()) analysis.kmpTargets.joinToString(", ") else "common"})" else "✗ No"}")
         println("  Modules (${analysis.modules.size}):")
         analysis.modules.forEach { mod ->
-            println("    - :${mod.name} (Android: ${mod.isAndroid}, Compose: ${mod.isCompose}, KMP: ${mod.isKmp})")
+            val tags = mutableListOf<String>()
+            if (mod.isAndroid) tags.add("Android")
+            if (mod.isComposeMultiplatform) tags.add("CMP") else if (mod.isCompose) tags.add("Compose")
+            if (mod.isKmp) tags.add("KMP")
+            println("    - :${mod.name} (${tags.ifEmpty { listOf("JVM") }.joinToString(", ")})")
         }
 
         if (analysis.architectureHints.isNotEmpty()) {
