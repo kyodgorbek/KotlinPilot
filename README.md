@@ -135,6 +135,36 @@ Check Git status or perform automated pattern checks on working tree changes:
 
 ---
 
+## 📱 Using KotlinPilot with Your Personal Android Projects
+
+You can use KotlinPilot to autonomously build, fix, and refactor code in your **external Android Studio projects**:
+
+### Method 1: Set Target Workspace in `.env`
+Edit your `.env` file and specify the path to your Android app:
+```env
+PROJECT_WORKSPACE=C:\Users\Edgar\AndroidStudioProjects\MyAndroidApp
+```
+Then run tasks or start the server:
+```bash
+./gradlew run --args="analyze"
+./gradlew run --args='task "Create a Jetpack Compose LoginScreen with MVI ViewModel" --autonomous'
+./gradlew run --args="server"
+```
+
+### Method 2: Pass `--workspace` CLI Argument
+Point KotlinPilot to any Android Studio project on the fly without changing `.env`:
+```bash
+./gradlew run --args='task "Add Room database entities for Notes" --workspace "C:\Users\Edgar\AndroidStudioProjects\NotesApp" --autonomous'
+```
+
+### Method 3: Side-by-Side with Android Studio
+1. Keep **Android Studio** open with your Android project.
+2. Open **KotlinPilot** in IntelliJ IDEA (or run the web dashboard on `http://localhost:8080`).
+3. Set `PROJECT_WORKSPACE` to your Android project path.
+4. When you execute tasks, KotlinPilot writes files, builds with Android Gradle (`gradlew`), and runs tests in the background. Android Studio will automatically synchronize and show your new files and updates in real time!
+
+---
+
 ## 🛡️ Project Rules (`.kotlinpilot/rules.md`)
 
 You can define project-level conventions by creating a `.kotlinpilot/rules.md` file in your repository root:

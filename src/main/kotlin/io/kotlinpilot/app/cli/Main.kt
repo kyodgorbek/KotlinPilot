@@ -5,7 +5,24 @@ import io.kotlinpilot.infrastructure.config.KotlinPilotConfig
 import java.nio.file.Paths
 
 fun main(args: Array<String>) {
-    val config = KotlinPilotConfig.load()
+    var rawConfig = KotlinPilotConfig.load()
+    
+    // Check if --workspace / -w is passed anywhere in args
+    var workspaceOverride: String? = null
+    var i = 0
+    while (i < args.size) {
+        if ((args[i] == "--workspace" || args[i] == "-w") && i + 1 < args.size) {
+            workspaceOverride = args[i + 1]
+        }
+        i++
+    }
+
+    val config = if (!workspaceOverride.isNullOrBlank()) {
+        rawConfig.copy(projectWorkspace = Paths.get(workspaceOverride).toAbsolutePath().normalize())
+    } else {
+        rawConfig
+    }
+
     val cli = KotlinPilotCli(config)
 
     if (args.isEmpty()) {
@@ -27,16 +44,17 @@ fun main(args: Array<String>) {
             var provider: String? = null
             var model: String? = null
 
-            var i = 2
-            while (i < args.size) {
-                when (args[i]) {
+            var j = 2
+            while (j < args.size) {
+                when (args[j]) {
                     "--explain" -> mode = TaskMode.EXPLAIN
                     "--assisted" -> mode = TaskMode.ASSISTED
                     "--autonomous" -> mode = TaskMode.AUTONOMOUS
-                    "--provider" -> if (i + 1 < args.size) provider = args[++i]
-                    "--model" -> if (i + 1 < args.size) model = args[++i]
+                    "--provider" -> if (j + 1 < args.size) provider = args[++j]
+                    "--model" -> if (j + 1 < args.size) model = args[++j]
+                    "--workspace", "-w" -> if (j + 1 < args.size) j++
                 }
-                i++
+                j++
             }
 
             cli.runTask(taskDescription, mode = mode, provider = provider, model = model)
@@ -45,7 +63,7 @@ fun main(args: Array<String>) {
             cli.status()
         }
         "diff" -> {
-            val path = if (args.size > 1) args[1] else null
+            val path = if (args.size > 1 && !args[1].startsWith("-")) args[1] else null
             cli.diff(path)
         }
         "review" -> {
@@ -53,12 +71,12 @@ fun main(args: Array<String>) {
         }
         "server" -> {
             var port = 8080
-            var i = 1
-            while (i < args.size) {
-                if ((args[i] == "--port" || args[i] == "-p") && i + 1 < args.size) {
-                    port = args[++i].toIntOrNull() ?: 8080
+            var k = 1
+            while (k < args.size) {
+                if ((args[k] == "--port" || args[k] == "-p") && k + 1 < args.size) {
+                    port = args[++k].toIntOrNull() ?: 8080
                 }
-                i++
+                k++
             }
             cli.startServer(port)
         }

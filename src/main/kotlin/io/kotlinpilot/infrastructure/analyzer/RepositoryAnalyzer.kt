@@ -102,24 +102,24 @@ class RepositoryAnalyzer(
             val rawName = match.groupValues[1].removePrefix(":")
             val path = rawName.replace(':', '/')
             val modDir = File(root, path)
-            if (modDir.exists() && modDir.isDirectory) {
-                val modBuild = listOf(File(modDir, "build.gradle.kts"), File(modDir, "build.gradle"))
+            val modBuild = if (modDir.exists() && modDir.isDirectory) {
+                listOf(File(modDir, "build.gradle.kts"), File(modDir, "build.gradle"))
                     .firstOrNull { it.exists() }?.readText() ?: ""
-                
-                val isAndroid = modBuild.contains("com.android.") || File(modDir, "src/main/AndroidManifest.xml").exists()
-                val isCompose = modBuild.contains("compose", ignoreCase = true)
-                val isKmp = modBuild.contains("multiplatform")
+            } else ""
+            
+            val isAndroid = modBuild.contains("com.android.") || (modDir.exists() && File(modDir, "src/main/AndroidManifest.xml").exists())
+            val isCompose = modBuild.contains("compose", ignoreCase = true)
+            val isKmp = modBuild.contains("multiplatform")
 
-                modules.add(
-                    ModuleInfo(
-                        name = rawName,
-                        path = path,
-                        isAndroid = isAndroid,
-                        isCompose = isCompose,
-                        isKmp = isKmp
-                    )
+            modules.add(
+                ModuleInfo(
+                    name = rawName,
+                    path = path,
+                    isAndroid = isAndroid,
+                    isCompose = isCompose,
+                    isKmp = isKmp
                 )
-            }
+            )
         }
 
         if (modules.isEmpty()) {

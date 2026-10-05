@@ -35,6 +35,12 @@ class RepositoryAnalyzerTest {
             }
         """.trimIndent())
 
+        fs.writeFile("core/domain/build.gradle.kts", """
+            plugins {
+                kotlin("jvm")
+            }
+        """.trimIndent())
+
         fs.writeFile(".kotlinpilot/rules.md", """
             # Architecture Rules
             - Prefer Koin over Hilt.

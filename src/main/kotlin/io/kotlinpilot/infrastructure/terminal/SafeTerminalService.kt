@@ -30,8 +30,22 @@ class SafeTerminalService(
         timeoutSeconds: Long = defaultTimeoutSeconds,
         workingDirRelative: String = ""
     ): ProcessResult = withContext(Dispatchers.IO) {
-        val validatedCommand = commandPolicy.validateCommand(commandLine)
+        val validatedCommand = try {
+            commandPolicy.validateCommand(commandLine)
+        } catch (e: Exception) {
+            return@withContext ProcessResult(
+                success = false,
+                exitCode = -1,
+                stdout = "",
+                stderr = e.message ?: "Command security policy violation",
+                durationMs = 0
+            )
+        }
+
         val workingDir = workspacePolicy.validateAndResolvePath(workingDirRelative).toFile()
+        if (!workingDir.exists()) {
+            workingDir.mkdirs()
+        }
 
         val isWindows = System.getProperty("os.name").lowercase().contains("win")
         val processBuilder = if (isWindows) {
@@ -46,7 +60,17 @@ class SafeTerminalService(
         processBuilder.environment().put("CI", "true")
 
         val startTime = System.currentTimeMillis()
-        val process = processBuilder.start()
+        val process = try {
+            processBuilder.start()
+        } catch (e: Exception) {
+            return@withContext ProcessResult(
+                success = false,
+                exitCode = -1,
+                stdout = "",
+                stderr = "Failed to launch process: ${e.message}",
+                durationMs = 0
+            )
+        }
 
         val stdoutFuture = process.inputStream.bufferedReader().useLines { it.toList() }
         val stderrFuture = process.errorStream.bufferedReader().useLines { it.toList() }
